@@ -260,6 +260,12 @@ mach_error_t AMDeviceStartService(struct am_device *device, CFStringRef
     service_name, service_conn_t *handle, unsigned int *
     unknown);
 
+mach_error_t AMDeviceSecureStartService(struct am_device *device, CFStringRef 
+    service_name, unsigned int *unknown, service_conn_t *handle);
+
+int AMDeviceSecureTransferPath(service_conn_t *handle, struct am_device *device, CFURLRef url, CFDictionaryRef options, void *callback, int callback_arg);
+int AMDeviceSecureInstallApplication(service_conn_t *handle, struct am_device *device, CFURLRef url, CFDictionaryRef options, void *callback, int callback_arg);
+
 mach_error_t AMDeviceStartHouseArrestService(struct am_device *device, CFStringRef identifier, void *unknown, service_conn_t *handle, unsigned int *what);
 
 /* Stops a session. You should do this before accessing services.
@@ -430,6 +436,7 @@ mach_error_t AMDeviceRetain(struct am_device *device);
 mach_error_t AMDeviceRelease(struct am_device *device);
 CFStringRef AMDeviceCopyValue(struct am_device *device, unsigned int, CFStringRef cfstring);
 CFStringRef AMDeviceCopyDeviceIdentifier(struct am_device *device);
+int AMDeviceGetInterfaceType(struct am_device *device);
 
 typedef void (*notify_callback)(CFStringRef notification, void *data);
 
