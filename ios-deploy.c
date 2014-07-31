@@ -120,8 +120,8 @@ def autoexit_command(debugger, command, result, internal_dict):\n\
 ")
 
 typedef struct am_device * AMDeviceRef;
-int AMDeviceSecureTransferPath(int zero, AMDeviceRef device, CFURLRef url, CFDictionaryRef options, void *callback, int cbarg);
-int AMDeviceSecureInstallApplication(int zero, AMDeviceRef device, CFURLRef url, CFDictionaryRef options, void *callback, int cbarg);
+// int AMDeviceSecureTransferPath(int zero, AMDeviceRef device, CFURLRef url, CFDictionaryRef options, void *callback, int cbarg);
+// int AMDeviceSecureInstallApplication(int zero, AMDeviceRef device, CFURLRef url, CFDictionaryRef options, void *callback, int cbarg);
 int AMDeviceMountImage(AMDeviceRef device, CFStringRef image, CFDictionaryRef options, void *callback, int cbarg);
 mach_error_t AMDeviceLookupApplications(AMDeviceRef device, CFDictionaryRef options, CFDictionaryRef *result);
 
@@ -260,6 +260,85 @@ CFStringRef copy_xcode_path_for(CFStringRef subPath, CFStringRef search) {
         CFRelease(path);
         return NULL;
     }
+}
+
+// Please ensure that device is connected or the name will be unknown
+const char *get_device_hardware_name(const AMDeviceRef device) {
+    CFStringRef model = AMDeviceCopyValue(device, 0, CFSTR("HardwareModel"));
+    const char *hwmodel = CFStringGetCStringPtr(model, CFStringGetSystemEncoding());
+
+    if (hwmodel && !strcmp("M68AP", hwmodel))
+        return "iPhone";
+    if (hwmodel && !strcmp("N45AP", hwmodel))
+        return "iPod touch";
+    if (hwmodel && !strcmp("N82AP", hwmodel))
+        return "iPhone 3G";
+    if (hwmodel && !strcmp("N72AP", hwmodel))
+        return "iPod touch 2G";
+    if (hwmodel && !strcmp("N88AP", hwmodel))
+        return "iPhone 3GS";
+    if (hwmodel && !strcmp("N18AP", hwmodel))
+        return "iPod touch 3G";
+    if (hwmodel && !strcmp("K48AP", hwmodel))
+        return "iPad";
+    if (hwmodel && !strcmp("N90AP", hwmodel))
+        return "iPhone 4 (GSM)";
+    if (hwmodel && !strcmp("N81AP", hwmodel))
+        return "iPod touch 4G";
+    if (hwmodel && !strcmp("K66AP", hwmodel))
+        return "Apple TV 2G";
+    if (hwmodel && !strcmp("N92AP", hwmodel))
+        return "iPhone 4 (CDMA)";
+    if (hwmodel && !strcmp("N90BAP", hwmodel))
+        return "iPhone 4 (GSM, revision A)";
+    if (hwmodel && !strcmp("K93AP", hwmodel))
+        return "iPad 2";
+    if (hwmodel && !strcmp("K94AP", hwmodel))
+        return "iPad 2 (GSM)";
+    if (hwmodel && !strcmp("K95AP", hwmodel))
+        return "iPad 2 (CDMA)";
+    if (hwmodel && !strcmp("K93AAP", hwmodel))
+        return "iPad 2 (Wi-Fi, revision A)";
+    if (hwmodel && !strcmp("P105AP", hwmodel))
+        return "iPad mini";
+    if (hwmodel && !strcmp("P106AP", hwmodel))
+        return "iPad mini (GSM)";
+    if (hwmodel && !strcmp("P107AP", hwmodel))
+        return "iPad mini (CDMA)";
+    if (hwmodel && !strcmp("N94AP", hwmodel))
+        return "iPhone 4S";
+    if (hwmodel && !strcmp("N41AP", hwmodel))
+        return "iPhone 5 (GSM)";
+    if (hwmodel && !strcmp("N42AP", hwmodel))
+        return "iPhone 5 (Global/CDMA)";
+    if (hwmodel && !strcmp("N48AP", hwmodel))
+        return "iPhone 5c (GSM)";
+    if (hwmodel && !strcmp("N49AP", hwmodel))
+        return "iPhone 5c (Global/CDMA)";
+    if (hwmodel && !strcmp("N51AP", hwmodel))
+        return "iPhone 5s (GSM)";
+    if (hwmodel && !strcmp("N53AP", hwmodel))
+        return "iPhone 5s (Global/CDMA)";
+    if (hwmodel && !strcmp("J1AP", hwmodel))
+        return "iPad 3";
+    if (hwmodel && !strcmp("J2AP", hwmodel))
+        return "iPad 3 (GSM)";
+    if (hwmodel && !strcmp("J2AAP", hwmodel))
+        return "iPad 3 (CDMA)";
+    if (hwmodel && !strcmp("P101AP", hwmodel))
+        return "iPad 4";
+    if (hwmodel && !strcmp("P102AP", hwmodel))
+        return "iPad 4 (GSM)";
+    if (hwmodel && !strcmp("P103AP", hwmodel))
+        return "iPad 4 (CDMA)";
+    if (hwmodel && !strcmp("N78AP", hwmodel))
+        return "iPod touch 5G";
+    if (hwmodel && !strcmp("J33AP", hwmodel))
+        return "Apple TV 3G";
+    if (hwmodel && !strcmp("J33IAP", hwmodel))
+        return "Apple TV 3.1G";
+
+    return "Unknown Device";
 }
 
 CFMutableArrayRef get_device_product_version_parts(AMDeviceRef device) {
@@ -850,6 +929,15 @@ CFStringRef get_bundle_id(CFURLRef app_url)
 }
 
 void handle_device(AMDeviceRef device) {
+    printf("DEVICE CONNECTION: %d\n", AMDeviceGetInterfaceType(device));
+
+    AMDeviceConnect(device);
+
+    CFStringRef name = AMDeviceCopyValue(device, 0, CFSTR("DeviceName")),
+                model = AMDeviceCopyValue(device, 0, CFSTR("HardwareModel"));
+    printf("NAME: %s, %s\n", get_device_hardware_name(device), CFStringGetCStringPtr(name, CFStringGetSystemEncoding()));
+    AMDeviceDisconnect(device);
+
     if (found_device) return; // handle one device only
     CFStringRef found_device_id = AMDeviceCopyDeviceIdentifier(device);
 
@@ -907,26 +995,63 @@ void handle_device(AMDeviceRef device) {
         assert(AMDeviceValidatePairing(device) == 0);
         assert(AMDeviceStartSession(device) == 0);
 
-
-
-        service_conn_t afcFd;
-        assert(AMDeviceStartService(device, CFSTR("com.apple.afc"), &afcFd, NULL) == 0);
-        assert(AMDeviceStopSession(device) == 0);
-        assert(AMDeviceDisconnect(device) == 0);
-        assert(AMDeviceTransferApplication(afcFd, path, NULL, transfer_callback, NULL) == 0);
-
-        close(afcFd);
-
         CFStringRef keys[] = { CFSTR("PackageType") };
         CFStringRef values[] = { CFSTR("Developer") };
         CFDictionaryRef options = CFDictionaryCreate(NULL, (const void **)&keys, (const void **)&values, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+
+        int ret = 0;
+        service_conn_t afcFd;
+        service_conn_t installFd;
+
+        // AMDeviceGetInterfaceType(device) 0=Unknown, 1 = Direct/USB, 2 = Indirect/WIFI
+        printf("ret is %X, %d\n", ret, AMDeviceGetInterfaceType(device));
+        if(AMDeviceGetInterfaceType(device)==2 || 1==1) {
+            printf("YO YO\n");
+
+            ret = AMDeviceSecureStartService(device, CFSTR("com.apple.afc"), NULL, &afcFd);
+
+            printf("tranfer %X\n", ret); 
+            assert(AMDeviceSecureTransferPath(NULL, device, url, options, transfer_callback, 0)==0);
+
+            ret  = AMDeviceSecureInstallApplication(NULL, device, url, options, install_callback, 0);
+            printf("install %X\n", ret);
+            assert(ret==0);
+
+            assert(AMDeviceStopSession(device) == 0);
+            assert(AMDeviceDisconnect(device) == 0);
+
+
+            if (!debug) 
+                exit(0); // no debug phase
+            
+            launch_debugger(device, url);
+            return;
+        }
+
+        ret = AMDeviceStartService(device, CFSTR("com.apple.afc"), &afcFd, NULL);
+         
+
+        if(ret != 0) {
+           
+        }
+
+        assert(ret == 0);
+
+        assert(AMDeviceStopSession(device) == 0);
+        assert(AMDeviceDisconnect(device) == 0);
+
+        ret = AMDeviceTransferApplication(afcFd, path, NULL, transfer_callback, NULL) ;
+
+        printf("TRANSFER %X\n", ret);
+        assert(ret== 0);
+
+        close(afcFd);
 
         AMDeviceConnect(device);
         assert(AMDeviceIsPaired(device));
         assert(AMDeviceValidatePairing(device) == 0);
         assert(AMDeviceStartSession(device) == 0);
 
-        service_conn_t installFd;
         assert(AMDeviceStartService(device, CFSTR("com.apple.mobile.installation_proxy"), &installFd, NULL) == 0);
 
         assert(AMDeviceStopSession(device) == 0);
